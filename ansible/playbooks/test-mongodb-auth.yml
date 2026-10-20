@@ -1,0 +1,46 @@
+---
+- name: Verify TravelMemory MongoDB authentication
+  hosts: database
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/all/vault.yml
+
+  tasks:
+    - name: Test authenticated database read and write
+      ansible.builtin.command:
+        argv:
+          - /opt/mern-mongo-venv/bin/python
+          - -c
+          - |
+            import os
+            from pymongo import MongoClient
+
+            client = MongoClient(
+                host="127.0.0.1",
+                port=27017,
+                username="travelmemory_app",
+                password=os.environ["MONGO_APP_PASSWORD"],
+                authSource="travelmemory",
+                serverSelectionTimeoutMS=5000
+            )
+
+            db = client["travelmemory"]
+            collection = db["deployment_test"]
+
+            result = collection.insert_one({"test": "ansible-auth"})
+            assert collection.find_one({"_id": result.inserted_id})
+            collection.delete_one({"_id": result.inserted_id})
+
+            print("MongoDB authenticated read/write successful")
+            client.close()
+      environment:
+        MONGO_APP_PASSWORD: "{{ vault_mongo_app_password }}"
+      register: mongo_test
+      changed_when: false
+      no_log: true
+
+    - name: Confirm MongoDB application connectivity
+      ansible.builtin.debug:
+        msg: "MongoDB application user authentication and read/write test PASSED"
+      when: mongo_test.rc == 0

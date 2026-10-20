@@ -1,0 +1,41 @@
+---
+- name: Install MERN web server prerequisites
+  hosts: web
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install basic packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+          - gnupg
+          - git
+          - nginx
+          - build-essential
+        state: present
+        update_cache: true
+
+    - name: Download NodeSource setup script
+      ansible.builtin.get_url:
+        url: https://deb.nodesource.com/setup_24.x
+        dest: /tmp/nodesource_setup.sh
+        mode: '0755'
+
+    - name: Configure NodeSource repository
+      ansible.builtin.command:
+        cmd: bash /tmp/nodesource_setup.sh
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Install Node.js and NPM
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+        update_cache: true
+
+    - name: Start and enable Nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: started
+        enabled: true

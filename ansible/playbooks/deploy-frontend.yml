@@ -1,0 +1,66 @@
+---
+- name: Deploy TravelMemory React frontend and Nginx
+  hosts: web
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install React frontend dependencies
+      ansible.builtin.command:
+        cmd: npm install --no-audit --no-fund
+        chdir: /opt/travelmemory/frontend
+        creates: /opt/travelmemory/frontend/node_modules
+
+    - name: Build React production frontend
+      ansible.builtin.command:
+        cmd: npm run build
+        chdir: /opt/travelmemory/frontend
+      environment:
+        CI: "false"
+        REACT_APP_BACKEND_URL: "http://{{ ansible_host }}"
+      register: frontend_build
+
+    - name: Create Nginx document root
+      ansible.builtin.file:
+        path: /var/www/travelmemory
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Copy React build files to Nginx
+      ansible.builtin.copy:
+        src: /opt/travelmemory/frontend/build/
+        dest: /var/www/travelmemory/
+        remote_src: true
+        owner: www-data
+        group: www-data
+        mode: preserve
+
+    - name: Install TravelMemory Nginx configuration
+      ansible.builtin.template:
+        src: ../templates/travelmemory-nginx.conf.j2
+        dest: /etc/nginx/sites-available/travelmemory
+        mode: '0644'
+
+    - name: Enable TravelMemory Nginx site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/travelmemory
+        dest: /etc/nginx/sites-enabled/travelmemory
+        state: link
+
+    - name: Disable default Nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Validate Nginx configuration
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Restart Nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: restarted
+        enabled: true

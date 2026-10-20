@@ -1,0 +1,34 @@
+---
+- name: Configure MongoDB users
+  hosts: database
+  become: true
+
+  vars_files:
+    - ../group_vars/all/vault.yml
+
+  tasks:
+    - name: Create MongoDB administrator
+      community.mongodb.mongodb_user:
+        database: admin
+        name: mernadmin
+        password: "{{ vault_mongo_admin_password }}"
+        roles:
+          - root
+        update_password: always
+        create_for_localhost_exception: /var/lib/mongodb/.initial_admin_created
+        state: present
+      no_log: true
+
+    - name: Create TravelMemory application user
+      community.mongodb.mongodb_user:
+        login_user: mernadmin
+        login_password: "{{ vault_mongo_admin_password }}"
+        login_database: admin
+        database: travelmemory
+        name: travelmemory_app
+        password: "{{ vault_mongo_app_password }}"
+        roles:
+          - db: travelmemory
+            role: readWrite
+        state: present
+      no_log: true

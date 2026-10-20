@@ -1,0 +1,60 @@
+---
+- name: Deploy TravelMemory Express backend
+  hosts: web
+  become: true
+
+  vars_files:
+    - ../group_vars/all/vault.yml
+
+  tasks:
+    - name: Clone TravelMemory application
+      ansible.builtin.git:
+        repo: https://github.com/UnpredictablePrashant/TravelMemory.git
+        dest: /opt/travelmemory
+        version: main
+        update: true
+
+    - name: Install backend dependencies
+      ansible.builtin.command:
+        cmd: npm install --omit=dev --no-audit
+        chdir: /opt/travelmemory/backend
+        creates: /opt/travelmemory/backend/node_modules
+
+    - name: Create secure environment directory
+      ansible.builtin.file:
+        path: /etc/travelmemory
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Configure backend environment
+      ansible.builtin.template:
+        src: ../templates/backend.env.j2
+        dest: /etc/travelmemory/backend.env
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+      notify: Restart backend
+
+    - name: Install backend systemd service
+      ansible.builtin.template:
+        src: ../templates/travelmemory-backend.service.j2
+        dest: /etc/systemd/system/travelmemory-backend.service
+        mode: '0644'
+      notify: Restart backend
+
+    - name: Enable and start backend service
+      ansible.builtin.systemd_service:
+        name: travelmemory-backend
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: Restart backend
+      ansible.builtin.systemd_service:
+        name: travelmemory-backend
+        state: restarted
+        daemon_reload: true

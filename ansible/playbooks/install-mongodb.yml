@@ -1,0 +1,47 @@
+---
+- name: Install MongoDB on private EC2
+  hosts: database
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - gnupg
+          - ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Download MongoDB signing key
+      ansible.builtin.get_url:
+        url: https://pgp.mongodb.com/server-8.0.asc
+        dest: /tmp/mongodb-server-8.0.asc
+        mode: '0644'
+
+    - name: Convert signing key to GPG format
+      ansible.builtin.command:
+        cmd: >
+          gpg --dearmor
+          --output /usr/share/keyrings/mongodb-server-8.0.gpg
+          /tmp/mongodb-server-8.0.asc
+        creates: /usr/share/keyrings/mongodb-server-8.0.gpg
+
+    - name: Add MongoDB repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse"
+        filename: mongodb-org-8.0
+        state: present
+        update_cache: true
+
+    - name: Install MongoDB
+      ansible.builtin.apt:
+        name: mongodb-org
+        state: present
+
+    - name: Start and enable MongoDB
+      ansible.builtin.systemd_service:
+        name: mongod
+        state: started
+        enabled: true
